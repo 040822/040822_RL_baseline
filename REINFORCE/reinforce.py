@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import gym  
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu") # 由于模型简单，cpu训练速度反而更快
 print("device is:",device)
 
 # 定义策略网络
@@ -34,14 +35,18 @@ class PolicyNetwork(nn.Module):
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, output_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size)
+        self.fc4 = nn.Linear(hidden_size, hidden_size)
+        self.fc5 = nn.Linear(hidden_size, output_size)
     
     def forward(self, x):
         # 前向传播
         x = self.state_process(x)
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        x = torch.softmax(self.fc3(x), dim=1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
+        x = torch.relu(self.fc3(x))
+        x = torch.relu(self.fc4(x))
+        x = torch.softmax(self.fc3(x), dim=-1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
         return x
     
     def act(self, state):
