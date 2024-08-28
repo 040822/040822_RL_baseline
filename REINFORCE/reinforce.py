@@ -1,4 +1,6 @@
 import json
+import time
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import gym  
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("device is:",device)
 
 # 定义策略网络
 class PolicyNetwork(nn.Module):
@@ -44,7 +47,7 @@ class PolicyNetwork(nn.Module):
     def act(self, state):
         # 选择动作，输入状态，输出动作
         state = self.state_process(state)
-        probs = self.forward(state).cpu()
+        probs = self.forward(state)
         prob_distribution = Categorical(probs)
         action = prob_distribution.sample()
         log_prob = prob_distribution.log_prob(action)
@@ -116,6 +119,9 @@ def train(env, agent, num_episodes):
         None
     """
     writer = SummaryWriter()
+    start_time = time.time()  # 记录开始时间
+    print_every = num_episodes/1000 # 每训练0.1%输出一次信息
+    
     for episode in range(num_episodes):
         state = env.reset()
         agent.reset()
@@ -133,10 +139,20 @@ def train(env, agent, num_episodes):
         
         loss = agent.update()
         reward_sum = sum(agent.rewards)
-        print('Episode: {}, Loss: {}, Reward: {}'.format(episode, loss,reward_sum))
+        now_time = time.time()
+        time_elapsed = now_time - start_time
+        time_last = time_elapsed / (episode + 1) * (num_episodes - episode - 1) # 预计剩余时间
+        if episode % print_every == 0:
+            print('Episode: {}, Loss: {}, Reward: {}'.format(episode, loss,reward_sum))
+            print('Time elapsed: {:.2f} s, Time remaining: {:.2f} s'.format(time_elapsed, time_last))
   
         writer.add_scalar('Loss', loss.item(), episode)
         writer.add_scalar('Reward', reward_sum, episode)
+    
+    end_time = time.time()  # 记录结束时间
+    elapsed_time = end_time - start_time  # 计算运行时间
+    print(f'Training completed in {elapsed_time:.2f} seconds')
+    return None
     
 # 使用示例
 if __name__ == '__main__':
