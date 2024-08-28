@@ -31,7 +31,7 @@ class PolicyNetwork(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, output_size):
-        # 一个简单的三层MLP，也有人认为输入层不算，那就是两层。
+        # 一个简单的MLP
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -41,7 +41,7 @@ class PolicyNetwork(nn.Module):
     
     def forward(self, x):
         # 前向传播
-        x = self.state_process(x)
+        #x = self.state_process(x)
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
@@ -51,8 +51,11 @@ class PolicyNetwork(nn.Module):
     
     def act(self, state):
         # 选择动作，输入状态，输出动作
-        state = self.state_process(state)
-        probs = self.forward(state)
+        
+        state = self.state_process(state) # 对输入的state进行处理
+        probs = self.forward(state) # 前向传播，让神经网络输出概率分布
+        
+        # 从概率分布中采样一个动作
         prob_distribution = Categorical(probs)
         action = prob_distribution.sample()
         log_prob = prob_distribution.log_prob(action)
@@ -89,19 +92,19 @@ class REINFORCE:
         cumulative_rewards = [] #return
         cumulative_reward = 0
         for reward in reversed(self.rewards): 
-            cumulative_reward = reward*self.gamma + cumulative_reward
+            cumulative_reward = reward + cumulative_reward*self.gamma
             cumulative_rewards.insert(0, cumulative_reward) # 从头部插入。注意rewards列表是翻转之后操作的。
         
         # 确保 cumulative_rewards 和 self.log_probs 启用了梯度计算
         cumulative_rewards_tensor = torch.tensor(cumulative_rewards, requires_grad=True)
         log_probs_tensor = torch.tensor(self.log_probs, requires_grad=True)
         
-        # 更新策略网络
-        self.optimizer.zero_grad()
         loss = - cumulative_rewards_tensor * log_probs_tensor
         loss = loss.sum()
         # L = - return * log(π)
         
+        # 更新策略网络
+        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         return loss
@@ -125,7 +128,7 @@ def train(env, agent, num_episodes):
     """
     writer = SummaryWriter()
     start_time = time.time()  # 记录开始时间
-    print_every = num_episodes/1000 # 每训练0.1%输出一次信息
+    print_every = num_episodes/100 # 每训练1%输出一次信息
     
     for episode in range(num_episodes):
         state = env.reset()
