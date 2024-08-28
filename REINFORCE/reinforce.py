@@ -46,7 +46,7 @@ class PolicyNetwork(nn.Module):
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
         x = torch.relu(self.fc4(x))
-        x = torch.softmax(self.fc3(x), dim=-1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
+        x = torch.softmax(self.fc5(x), dim=-1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
         return x
     
     def act(self, state):
