@@ -85,17 +85,20 @@ class REINFORCE:
         # 计算回报的累积奖励,也就是return
         cumulative_rewards = [] #return
         cumulative_reward = 0
+        loss = []
+        
         for reward in reversed(self.rewards): 
             cumulative_reward = reward + cumulative_reward*self.gamma
             cumulative_rewards.insert(0, cumulative_reward) # 从头部插入。注意rewards列表是翻转之后操作的。
         
         # 确保 cumulative_rewards 和 self.log_probs 启用了梯度计算
-        cumulative_rewards_tensor = torch.tensor(cumulative_rewards, requires_grad=True)
+        cumulative_rewards_tensor = torch.tensor(cumulative_rewards)
         cumulative_rewards_tensor = (cumulative_rewards_tensor - cumulative_rewards_tensor.mean()) / (cumulative_rewards_tensor.std() + 1e-5) # 归一化
         log_probs_tensor = torch.tensor(self.log_probs, requires_grad=True)
         
-        loss = - cumulative_rewards_tensor * log_probs_tensor
-        loss = loss.sum()
+        for log_prob, R in zip(self.log_probs, cumulative_rewards_tensor):
+            loss.append(-log_prob * R)
+        loss = torch.stack(loss).sum()
         # L = - return * log(π)
         
         # 更新策略网络
@@ -124,7 +127,7 @@ def train(env, agent, num_episodes):
     writer = SummaryWriter()
     start_time = time.time()  # 记录开始时间
     print_every = num_episodes/100 # 每训练1%输出一次信息
-    
+    print_every = 1
     for episode in range(num_episodes):
         state = env.reset()
         agent.reset()
