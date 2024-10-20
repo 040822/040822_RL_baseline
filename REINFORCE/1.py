@@ -33,33 +33,18 @@ class PolicyNetwork(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         # 一个简单的MLP
         super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc5 = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+            nn.Softmax(dim=-1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
+        )
     
     def forward(self, x):
         # 前向传播
-        #x = self.state_process(x)
-        x = torch.relu(self.fc1(x))
-        x = torch.softmax(self.fc5(x), dim=-1) # softmax函数特性：输出值在0-1之间，且和为1 =》概率分布
+        x = self.fc(x)
         return x
     
-    def act(self, state):
-        # 选择动作，输入状态，输出动作
-        
-        state = self.state_process(state) # 对输入的state进行处理
-        probs = self.forward(state) # 前向传播，让神经网络输出概率分布
-        
-        # 从概率分布中采样一个动作
-        prob_distribution = Categorical(probs)
-        action = prob_distribution.sample()
-        log_prob = prob_distribution.log_prob(action)
-        
-        return action.item(), log_prob
-    
-    def state_process(self, state):
-        # 对输入的state进行处理，比如将numpy数组转换为tensor
-        # 这个函数因环境而异，或许不应该写在算法类里而应该和train函数一样写在外面？
-        return torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
 
 # 定义策略梯度算法
 class REINFORCE:
@@ -83,19 +68,29 @@ class REINFORCE:
 
     def update(self):
         # 计算回报的累积奖励,也就是return
-        cumulative_rewards = [] #return
         cumulative_reward = 0
-        for reward in reversed(self.rewards): 
+        cumulative_rewards = [] #return
+        loss = []
+        
+        #for reward in reversed(self.rewards): 
+        for reward in self.rewards[::-1]: # 从后往前遍历
             cumulative_reward = reward + cumulative_reward*self.gamma
             cumulative_rewards.insert(0, cumulative_reward) # 从头部插入。注意rewards列表是翻转之后操作的。
         
         # 确保 cumulative_rewards 和 self.log_probs 启用了梯度计算
-        cumulative_rewards_tensor = torch.tensor(cumulative_rewards, requires_grad=True)
-        cumulative_rewards_tensor = (cumulative_rewards_tensor - cumulative_rewards_tensor.mean()) / (cumulative_rewards_tensor.std() + 1e-5) # 归一化
-        log_probs_tensor = torch.tensor(self.log_probs, requires_grad=True)
+        #cumulative_rewards_tensor = torch.tensor(cumulative_rewards, requires_grad=True)
+        cumulative_rewards_tensor = torch.tensor(cumulative_rewards)
+        #log_probs_tensor = torch.tensor(self.log_probs)
         
-        loss = - cumulative_rewards_tensor * log_probs_tensor
-        loss = loss.sum()
+        cumulative_rewards_tensor = (cumulative_rewards_tensor - cumulative_rewards_tensor.mean()) / (cumulative_rewards_tensor.std() + 1e-5) # 归一化
+        
+        for log_prob, R in zip(self.log_probs, cumulative_rewards_tensor):
+            loss.append(-log_prob * R)
+        
+        
+        
+        #loss = - cumulative_rewards_tensor * log_probs_tensor
+        loss = torch.stack(loss).sum()
         # L = - return * log(π)
         
         # 更新策略网络
@@ -104,9 +99,25 @@ class REINFORCE:
         self.optimizer.step()
         return loss
     
+    
     def select_action(self, state):
-        # 选择动作
-        return self.policy_net.act(state)
+        # 选择动作，输入状态，输出动作
+        
+        state = self.state_process(state) # 对输入的state进行处理
+        probs = self.policy_net(state) # 前向传播，让神经网络输出概率分布
+        
+        # 从概率分布中采样一个动作
+        prob_distribution = Categorical(probs)
+        action = prob_distribution.sample()
+        log_prob = prob_distribution.log_prob(action)
+        
+        return action.item(), log_prob
+    
+    def state_process(self, state):
+        # 对输入的state进行处理，比如将numpy数组转换为tensor
+        # 这个函数因环境而异，或许不应该写在算法类里而应该和train函数一样写在外面？
+        # return torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
+        return torch.from_numpy(state).float()
     
     
 def train(env, agent, num_episodes):
@@ -124,11 +135,12 @@ def train(env, agent, num_episodes):
     writer = SummaryWriter()
     start_time = time.time()  # 记录开始时间
     print_every = num_episodes/100 # 每训练1%输出一次信息
+    print_every = 1
     
     for episode in range(num_episodes):
         state = env.reset()
         agent.reset()
-        while True:
+        for t in range(1, 10000): # 假设最大步数为10000
             action,log_prob = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
             
