@@ -140,7 +140,7 @@ def train(env, agent, num_episodes):
     for episode in range(num_episodes):
         state = env.reset()
         agent.reset()
-        while True:
+        for t in range(1, 10000): # 假设最大步数为10000
             action,log_prob = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
             

@@ -58,9 +58,10 @@ def train():
         policy_loss = torch.stack(policy_loss).sum()
 
         policy_loss.backward()
+        print("policy_loss: ", policy_loss.item())
         optimizer.step()
 
-    for episode in range(1000):
+    for episode in range(100):
         state = env.reset()
         episode_rewards = []
         log_probs = []
